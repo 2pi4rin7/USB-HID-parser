@@ -12,7 +12,7 @@ KEY_CODES = {
     0x20: ['3', '#'], 0x21: ['4', '$'], 0x22: ['5', '%'], 0x23: ['6', '^'],
     0x24: ['7', '&'], 0x25: ['8', '*'], 0x26: ['9', '('], 0x27: ['0', ')'],
     0x28: ['\n', '\n'], 0x29: ['[ESC]', '[ESC]'], 0x2A: ['[BACKSPACE]', '[BACKSPACE]'],
-    0x2B: ['[TAB]', '[TAB]'], 0x2C: [' ', ' '], 0x2D: ['-', '_'], 0x2E: ['=', '+'],
+    0x2B: ['\t', '\t'], 0x2C: [' ', ' '], 0x2D: ['-', '_'], 0x2E: ['=', '+'],
     0x2F: ['[', '{'], 0x30: [']', '}'], 0x31: ['\\', '|'], 0x32: ['#', '~'],
     0x33: [';', ':'], 0x34: ['\'', '"'], 0x35: ['`', '~'], 0x36: [',', '<'],
     0x37: ['.', '>'], 0x38: ['/', '?'], 0x39: ['[CAPS]', '[CAPS]'],
@@ -32,7 +32,7 @@ def diff_keys(prev, curr):
     released = prev_set - curr_set
     return pressed, released
 
-def solve(file, output_file="result.txt", final_file="final.txt"):
+def solve(file, output_file="result.txt"):
     with open(file, 'r') as f:
         lines = f.readlines()
 
@@ -44,9 +44,7 @@ def solve(file, output_file="result.txt", final_file="final.txt"):
     left_ctrl = right_ctrl = 0
     is_cap = 0
 
-    with open(output_file, 'w', encoding="utf-8") as log, \
-         open(final_file, 'w', encoding="utf-8") as final:
-        
+    with open(output_file, 'w', encoding="utf-8") as output:
         for line in lines:
             line = line.strip().split(':')
             pressed, released = diff_keys(previous, line)
@@ -62,26 +60,13 @@ def solve(file, output_file="result.txt", final_file="final.txt"):
             for key_hex in pressed:
                 keycode = int(key_hex, 16)
                 if keycode not in KEY_CODES:
-                    log.write(f"[UNK-{key_hex}]")
+                    output.write(f"[UNK-{key_hex}]")
                     continue
 
                 key = KEY_CODES[keycode][(left_shift | right_shift) ^ is_cap]
-
-                # Alt/Ctrl/Shift combo log
-                if (left_alt or right_alt) or (left_ctrl or right_ctrl):
-                    if left_alt or right_alt:
-                        log.write("[ALT]")
-                    if left_ctrl or right_ctrl:
-                        log.write("[CTRL]")
-                    if left_shift or right_shift:
-                        log.write("[SHIFT]")
-                    log.write(f" + {key}\n")
-                    continue
-
                 # CapsLock
                 if key == '[CAPS]':
                     is_cap ^= 1
-                    log.write("[CAPS]\n")
                     continue
 
                 # Backspace
@@ -89,50 +74,48 @@ def solve(file, output_file="result.txt", final_file="final.txt"):
                     if cursor > 0:
                         buffer.pop(cursor-1)
                         cursor -= 1
-                    # log.write("[BACKSPACE]")
+                        # ghi lại toàn bộ buffer sau khi xóa
+                        output.seek(0)
+                        output.truncate()
+                        output.write("".join(buffer))
                     continue
 
-                # Tab
-                if key == '[TAB]':
+                # Tab thường
+                if key == '\t':
                     spaces = " " * 4
                     for ch in spaces:
                         buffer.insert(cursor, ch)
                         cursor += 1
-                    # log.write("[TAB]")
+                    output.write(spaces)
                     continue
 
-                # Arrows
+                # Mũi tên
                 if key == u'→':
                     cursor = min(len(buffer), cursor + 1)
-                    log.write("[→]")
                     continue
                 if key == u'←':
                     cursor = max(0, cursor - 1)
-                    log.write("[←]")
                     continue
                 if key == u'↓':
-                    log.write("[↓]")
+                    output.write("[↓]")
                     continue
                 if key == u'↑':
-                    log.write("[↑]")
+                    output.write("[↑]")
                     continue
 
                 # Enter
                 if key == '\n':
                     buffer.insert(cursor, key)
                     cursor += 1
-                    log.write("\n")
+                    output.write(key)
                     continue
 
-                # Normal char
+                # Ký tự bình thường
                 buffer.insert(cursor, key)
                 cursor += 1
-                log.write(key)
+                output.write(key)
 
             previous = line
-
-        final.write("".join(buffer))
-
 
 def main():
     args = sys.argv
