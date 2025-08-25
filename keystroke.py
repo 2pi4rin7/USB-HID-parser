@@ -1,6 +1,6 @@
 import sys
-import subprocess
-# Key codes mapping
+
+# Key codes mapping (đầy đủ)
 KEY_CODES = {
     0x04: ['a', 'A'], 0x05: ['b', 'B'], 0x06: ['c', 'C'], 0x07: ['d', 'D'],
     0x08: ['e', 'E'], 0x09: ['f', 'F'], 0x0A: ['g', 'G'], 0x0B: ['h', 'H'],
@@ -12,116 +12,134 @@ KEY_CODES = {
     0x20: ['3', '#'], 0x21: ['4', '$'], 0x22: ['5', '%'], 0x23: ['6', '^'],
     0x24: ['7', '&'], 0x25: ['8', '*'], 0x26: ['9', '('], 0x27: ['0', ')'],
     0x28: ['\n', '\n'], 0x29: ['[ESC]', '[ESC]'], 0x2A: ['[BACKSPACE]', '[BACKSPACE]'],
-    0x2C: [' ', ' '], 0x2D: ['-', '_'], 0x2E: ['=', '+'], 0x2F: ['[', '{'],
-    0x30: [']', '}'], 0x32: ['#', '~'], 0x33: [';', ':'], 0x34: ['\'', '"'],
-    0x36: [',', '<'], 0x37: ['.', '>'], 0x38: ['/', '?'], 0x39: ['[CAPSLOCK]', '[CAPSLOCK]'],
-    0x2B: ['\t', '\t'], 0x4F: [u'→', u'→'], 0x50: [u'←', u'←'], 0x51: [u'↓', u'↓'],
-    0x52: [u'↑', u'↑'], 0x39: [u'[CAPS]', u'[CAPS]'], 0x81: ['VDn', 'VDn'], 0x80: ['VUp', 'VUp'],
-    0x7F: ['Mut', 'Mut'], 0x53: ['NumL', 'NumL'], 0x54: ['/', '/'], 0x55: ['*', '*'], 0x56:['-', '-'],
-    0x5F: ['7', '7'], 0x60: ['8', '8'], 0x61: ['9', '9'], 0x57: ['+', '+'], 0x5C: ['4', '4'], 0x5D: ['5', '5'], 
-    0x5E: ['6', '6'], 0x85: [',', ','], 0x59: ['1', '1'], 0x5A: ['2', '2'], 0x5B: ['3', '3'], 0x58: ['\n', '\n'],
-    0x62: ['0', '0'], 0x63: ['.', '.'], 0x67: ['=', '=']
+    0x2B: ['[TAB]', '[TAB]'], 0x2C: [' ', ' '], 0x2D: ['-', '_'], 0x2E: ['=', '+'],
+    0x2F: ['[', '{'], 0x30: [']', '}'], 0x31: ['\\', '|'], 0x32: ['#', '~'],
+    0x33: [';', ':'], 0x34: ['\'', '"'], 0x35: ['`', '~'], 0x36: [',', '<'],
+    0x37: ['.', '>'], 0x38: ['/', '?'], 0x39: ['[CAPS]', '[CAPS]'],
+    0x4F: [u'→', u'→'], 0x50: [u'←', u'←'], 0x51: [u'↓', u'↓'], 0x52: [u'↑', u'↑'],
+    # keypad
+    0x53: ['NumL', 'NumL'], 0x54: ['/', '/'], 0x55: ['*', '*'], 0x56: ['-', '-'],
+    0x57: ['+', '+'], 0x58: ['\n', '\n'], 0x59: ['1', '1'], 0x5A: ['2', '2'],
+    0x5B: ['3', '3'], 0x5C: ['4', '4'], 0x5D: ['5', '5'], 0x5E: ['6', '6'],
+    0x5F: ['7', '7'], 0x60: ['8', '8'], 0x61: ['9', '9'], 0x62: ['0', '0'],
+    0x63: ['.', '.'], 0x67: ['=', '=']
 }
 
-def compare(previous, present):
-    for a, b in zip(previous, present):
-        c = int(a, 16)
-        d = int(b, 16)
-        if c != d and d == 0:
-            return "release_key"
-    return "new_key"
+def diff_keys(prev, curr):
+    prev_set = set([k for k in prev[2:] if k != '00'])
+    curr_set = set([k for k in curr[2:] if k != '00'])
+    pressed = curr_set - prev_set
+    released = prev_set - curr_set
+    return pressed, released
 
-
-def solve(file):
-    result = [["" for i in range(10000)] for j in range(10000)]
-    x = 0
-    y = 0
-    previous = ['00', '00', '00', '00', '00', '00', '00', '00']
-    left_shift = 0
-    is_cap = 0
-    left_alt = 0
-    left_ctrl = 0
-    right_shift = 0
-    right_alt = 0
-    right_ctrl = 0
+def solve(file, output_file="result.txt", final_file="final.txt"):
     with open(file, 'r') as f:
-        lines = f.readlines()        
-    output = open("result.txt", 'w') 
-    for line in lines:
-        line = line.strip().split(':')
-        if compare(previous, line) == 'release_key':
-            previous = line
-            continue
-        status = int(line[0], 16)
-        if (status & 1):
-            left_ctrl = 1
-        if (status >> 1) & 1:
-            left_shift = 1
-        if (status >> 2) & 1:
-            left_alt = 1
-        if (status >> 4) & 1:
-            right_ctrl = 1
-        if (status >> 5) & 1:
-            right_shift = 1
-        if (status >> 6) & 1:
-            right_alt = 1
-        if status == 0:
-            left_ctrl = left_alt = left_shift = 0
-            right_alt = right_ctrl = right_shift = 0
+        lines = f.readlines()
+
+    buffer = []
+    cursor = 0
+    previous = ['00']*8
+    left_shift = right_shift = 0
+    left_alt = right_alt = 0
+    left_ctrl = right_ctrl = 0
+    is_cap = 0
+
+    with open(output_file, 'w', encoding="utf-8") as log, \
+         open(final_file, 'w', encoding="utf-8") as final:
         
-        command = ""
-        if status != 0x02 and status != 0 and status != 0x20:
-            if left_shift:
-                command += " [left_shift] "
-            if left_ctrl: 
-                command += " [left_ctrl] "
-            if left_alt:
-                command += " [left_alt] "
-            if right_shift:
-                command += " [right_shift] "
-            if right_ctrl:
-                command += " [right_ctrl] "
-            if right_alt:
-                command += " [right_alt] "   
-            output.write(command)
-        for i in range(2, len(line)):
-            if line[i] == '00':
-                continue
-            try:
-                key = KEY_CODES[int(line[i], 16)][(left_shift | right_shift) ^ is_cap]
-                if left_alt == True:
-                    print(f'alt + {key}')
-                if key == u'[CAPS]':
-                    is_cap = not is_cap
-                elif key == u'→':
-                    y += 1
-                elif key == u'←':
-                    y -= 1
-                    y = max(y, 0)
-                elif key == u'↓':
-                    x += 1
-                elif key == u'↑':
-                    x -= 1
-                    x = max(x, 0)
-                elif key == '\n':
-                    output.write(key)
-                    x += 1
-                    y = 0
-                else:
-                    output.write(key)
-                    y += 1
-            except:
-                print(f"Can found the key {line[i]}")
-        previous = line
-        if status != 0x02 and status != 0 and status != 0x20:
-            output.write('\n')
+        for line in lines:
+            line = line.strip().split(':')
+            pressed, released = diff_keys(previous, line)
+
+            status = int(line[0], 16)
+            left_ctrl = (status & 1) != 0
+            left_shift = (status >> 1) & 1
+            left_alt = (status >> 2) & 1
+            right_ctrl = (status >> 4) & 1
+            right_shift = (status >> 5) & 1
+            right_alt = (status >> 6) & 1
+
+            for key_hex in pressed:
+                keycode = int(key_hex, 16)
+                if keycode not in KEY_CODES:
+                    log.write(f"[UNK-{key_hex}]")
+                    continue
+
+                key = KEY_CODES[keycode][(left_shift | right_shift) ^ is_cap]
+
+                # Alt/Ctrl/Shift combo log
+                if (left_alt or right_alt) or (left_ctrl or right_ctrl):
+                    if left_alt or right_alt:
+                        log.write("[ALT]")
+                    if left_ctrl or right_ctrl:
+                        log.write("[CTRL]")
+                    if left_shift or right_shift:
+                        log.write("[SHIFT]")
+                    log.write(f" + {key}\n")
+                    continue
+
+                # CapsLock
+                if key == '[CAPS]':
+                    is_cap ^= 1
+                    log.write("[CAPS]\n")
+                    continue
+
+                # Backspace
+                if key == '[BACKSPACE]':
+                    if cursor > 0:
+                        buffer.pop(cursor-1)
+                        cursor -= 1
+                    # log.write("[BACKSPACE]")
+                    continue
+
+                # Tab
+                if key == '[TAB]':
+                    spaces = " " * 4
+                    for ch in spaces:
+                        buffer.insert(cursor, ch)
+                        cursor += 1
+                    # log.write("[TAB]")
+                    continue
+
+                # Arrows
+                if key == u'→':
+                    cursor = min(len(buffer), cursor + 1)
+                    log.write("[→]")
+                    continue
+                if key == u'←':
+                    cursor = max(0, cursor - 1)
+                    log.write("[←]")
+                    continue
+                if key == u'↓':
+                    log.write("[↓]")
+                    continue
+                if key == u'↑':
+                    log.write("[↑]")
+                    continue
+
+                # Enter
+                if key == '\n':
+                    buffer.insert(cursor, key)
+                    cursor += 1
+                    log.write("\n")
+                    continue
+
+                # Normal char
+                buffer.insert(cursor, key)
+                cursor += 1
+                log.write(key)
+
+            previous = line
+
+        final.write("".join(buffer))
+
 
 def main():
     args = sys.argv
-    if len(args) != 2:
-        print(f"Usage: {args[0]} <file capture.pcapng>")
+    if len(args) != 3:
+        print(f"Usage: {args[0]} <file capture.txt>" " <output file>")
         return
-    solve(args[1])
+    solve(args[1], args[2])
 
 if __name__ == "__main__":
     main()
